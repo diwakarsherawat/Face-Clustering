@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import shutil
 import numpy as np
-from deepface import DeepFace
+import face_recognition
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, DBSCAN
@@ -48,13 +48,14 @@ if start_btn:
         for i, path in enumerate(image_paths):
             try:
                 status_text.text(f"Embedding image {i+1}/{len(image_paths)}")
-                reps = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True)
-
-                if len(reps) > 0:
-                    embeddings.append(reps[0]['embedding'])
+                image = face_recognition.load_image_file(path)
+                face_encodings = face_recognition.face_encodings(image)
+                if len(face_encodings) > 0: 
+                    embeddings.append(face_encodings[0])
                     valid_image_paths.append(path)
                 else:
                     shutil.copy(path, invalid_folder)
+
             except Exception as e:
                 shutil.copy(path, invalid_folder)
             progress.progress((i + 1) / len(image_paths))
