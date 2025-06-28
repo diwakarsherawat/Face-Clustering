@@ -1,11 +1,12 @@
-services:
+ services:
   - type: web
     name: face-clustering
     env: python
     plan: free
+    runtime: python
+    region: oregon
+    branch: main
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run main.py
-    region: frankfurt
-    runtime: python
-    branch: main
-    repo: https://github.com/diwakarsherawat/face-clustering
+    repo: https://github.com/diwakarsherawat/Face-Clustering
+    pythonVersion: 3.10
