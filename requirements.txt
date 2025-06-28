@@ -1,7 +1,10 @@
-streamlit==1.35.0
+ streamlit==1.35.0
 deepface==0.0.83
 scikit-learn==1.2.2
 matplotlib==3.7.1
 numpy==1.24.4
 pillow==9.5.0
 opencv-python-headless==4.5.5.64
+
+# Block opencv-python from getting auto-installed
+--extra-index-url https://pypi.org/simple
