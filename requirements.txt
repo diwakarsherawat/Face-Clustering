@@ -1,0 +1,6 @@
+streamlit
+deepface
+scikit-learn
+matplotlib
+Pillow
+numpy
