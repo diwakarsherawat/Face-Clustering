@@ -1,96 +1,104 @@
- 
 import streamlit as st
 import os
+import zipfile
 import shutil
 import numpy as np
-from deepface import DeepFace
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans, DBSCAN
-import matplotlib.pyplot as plt
+import uuid
 from PIL import Image
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from deepface import DeepFace
 
-st.set_page_config(page_title="Face Clustering App", layout="wide")
-st.title("🧠 Face Clustering App")
-st.markdown("Cluster face images from your Google Drive folder using DeepFace + ML")
+st.set_page_config(page_title="🎯 Personalized Face Clustering", layout="wide")
+st.title("📸 Face Clustering with Your Reference Photo")
 
-st.sidebar.header("Step 1: Input Settings")
-image_folder = st.sidebar.text_input("🔗 Enter Google Drive image folder path")
-output_folder = st.sidebar.text_input("📁 Enter Google Drive output folder path")
+# Create working directories
+INPUT_DIR = "temp_input"
+REFERENCE_DIR = "temp_ref"
+YOUR_CLUSTER = "output/Your_Cluster"
+OTHER_CLUSTERS = "output/Other_Clusters"
 
-algorithm = st.sidebar.selectbox("📊 Choose Clustering Algorithm", ["KMeans", "DBSCAN"])
+# Clean up old runs
+for folder in [INPUT_DIR, REFERENCE_DIR, YOUR_CLUSTER, OTHER_CLUSTERS]:
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+    os.makedirs(folder)
 
-if algorithm == "KMeans":
-    n_clusters = st.sidebar.number_input("Number of Clusters (K)", min_value=2, max_value=50, value=5)
-elif algorithm == "DBSCAN":
-    eps = st.sidebar.slider("DBSCAN eps (distance threshold)", 1.0, 50.0, 15.0)
-    min_samples = st.sidebar.slider("DBSCAN min_samples", 2, 20, 5)
+# Upload Section
+st.sidebar.header("📥 Upload Files")
+zip_file = st.sidebar.file_uploader("Upload ZIP of group images", type="zip")
+ref_image = st.sidebar.file_uploader("Upload your reference face image", type=["jpg", "jpeg", "png"])
 
-start_btn = st.sidebar.button("🚀 Start Clustering")
-
-if start_btn:
-    if not image_folder or not output_folder:
-        st.error("Please provide both input and output folder paths.")
+if st.sidebar.button("🚀 Start Clustering"):
+    if not zip_file or not ref_image:
+        st.error("Please upload both the ZIP file and your reference image.")
     else:
-        st.success("Processing started...")
-        image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(('jpg', 'jpeg', 'png'))]
+        # Save and extract ZIP
+        with open("images.zip", "wb") as f:
+            f.write(zip_file.read())
 
+        with zipfile.ZipFile("images.zip", 'r') as zip_ref:
+            zip_ref.extractall(INPUT_DIR)
+
+        # Save reference image
+        ref_path = os.path.join(REFERENCE_DIR, "ref.jpg")
+        with open(ref_path, "wb") as f:
+            f.write(ref_image.read())
+
+        # Load all valid image paths
+        image_paths = [os.path.join(INPUT_DIR, f) for f in os.listdir(INPUT_DIR) if f.lower().endswith(('jpg', 'jpeg', 'png'))]
         embeddings = []
-        valid_image_paths = []
-        invalid_folder = os.path.join(output_folder, "Invalid_Faces")
-        os.makedirs(invalid_folder, exist_ok=True)
+        valid_paths = []
 
+        st.subheader("🔎 Extracting Embeddings")
         progress = st.progress(0)
-        status_text = st.empty()
-
         for i, path in enumerate(image_paths):
             try:
-                status_text.text(f"Embedding image {i+1}/{len(image_paths)}")
-                reps = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='retinaface', enforce_detection=True)
+                rep = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='retinaface', enforce_detection=True)
+                if rep:
+                    embeddings.append(rep[0]['embedding'])
+                    valid_paths.append(path)
+            except:
+                continue
+            progress.progress((i+1)/len(image_paths))
 
-                if len(reps) > 0:
-                    embeddings.append(reps[0]['embedding'])
-                    valid_image_paths.append(path)
-                else:
-                    shutil.copy(path, invalid_folder)
-            except Exception as e:
-                shutil.copy(path, invalid_folder)
-            progress.progress((i + 1) / len(image_paths))
-
-        X = np.array(embeddings)
+        # Preprocess embeddings
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-
+        X_scaled = scaler.fit_transform(embeddings)
         pca = PCA(n_components=0.90)
         X_pca = pca.fit_transform(X_scaled)
 
-        if algorithm == "KMeans":
-            model = KMeans(n_clusters=n_clusters, random_state=42)
-            labels = model.fit_predict(X_pca)
-        else:
-            model = DBSCAN(eps=eps, min_samples=min_samples)
-            labels = model.fit_predict(X_pca)
+        st.subheader("📊 Clustering Faces")
+        kmeans = KMeans(n_clusters=5, random_state=42)
+        labels = kmeans.fit_predict(X_pca)
 
-        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-        n_noise = list(labels).count(-1)
+        # Embed reference image
+        st.subheader("📌 Matching Your Reference Face")
+        ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='retinaface')[0]['embedding']
+        ref_scaled = scaler.transform([ref_embedding])
+        ref_pca = pca.transform(ref_scaled)
+        ref_cluster = kmeans.predict(ref_pca)[0]
 
-        st.success(f"✅ Clustering complete: {n_clusters} clusters, {n_noise} noise points")
-
-        for label, img_path in zip(labels, valid_image_paths):
-            cluster_dir = os.path.join(output_folder, f"cluster_{label}")
+        # Separate clusters
+        for label, path in zip(labels, valid_paths):
+            if label == ref_cluster:
+                cluster_dir = os.path.join(YOUR_CLUSTER)
+            else:
+                cluster_dir = os.path.join(OTHER_CLUSTERS, f"cluster_{label}")
             os.makedirs(cluster_dir, exist_ok=True)
-            shutil.copy(img_path, cluster_dir)
+            shutil.copy(path, os.path.join(cluster_dir, os.path.basename(path)))
 
-        st.info(f"📂 Clustered images saved to: {output_folder}")
+        # Zip results
+        shutil.make_archive("Your_Cluster", 'zip', YOUR_CLUSTER)
+        shutil.make_archive("Other_Clusters", 'zip', OTHER_CLUSTERS)
 
-        if st.checkbox("Show Cluster Sample Images"):
-            for cluster_id in set(labels):
-                if cluster_id == -1:
-                    continue
-                st.subheader(f"Cluster {cluster_id}")
-                cluster_path = os.path.join(output_folder, f"cluster_{cluster_id}")
-                cluster_imgs = os.listdir(cluster_path)[:5]
-                cols = st.columns(len(cluster_imgs))
-                for img_file, col in zip(cluster_imgs, cols):
-                    img = Image.open(os.path.join(cluster_path, img_file))
-                    col.image(img, width=150)
+        # Download buttons
+        st.subheader("📁 Download Results")
+        with open("Your_Cluster.zip", "rb") as f:
+            st.download_button("Download Your Photos", f, file_name="Your_Cluster.zip")
+
+        with open("Other_Clusters.zip", "rb") as f:
+            st.download_button("Download Other Clusters", f, file_name="Other_Clusters.zip")
+
+        st.success("✅ Clustering complete!")
