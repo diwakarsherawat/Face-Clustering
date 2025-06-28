@@ -1,9 +1,7 @@
 import streamlit as st
+import os
 import shutil
 import numpy as np
-import os
-os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
-import cv2
 from deepface import DeepFace
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -50,7 +48,7 @@ if start_btn:
         for i, path in enumerate(image_paths):
             try:
                 status_text.text(f"Embedding image {i+1}/{len(image_paths)}")
-                reps = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='retinaface', enforce_detection=True)
+                reps = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True)
 
                 if len(reps) > 0:
                     embeddings.append(reps[0]['embedding'])
