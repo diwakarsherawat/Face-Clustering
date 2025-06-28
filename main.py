@@ -1,15 +1,16 @@
-import streamlit as st
+ import streamlit as st
 import os
-import zipfile
 import shutil
 import numpy as np
-import uuid
 from PIL import Image
 from sklearn.preprocessing import StandardScaler
 from deepface import DeepFace
 
-st.set_page_config(page_title="🎯 Personalized Face Clustering", layout="wide")
-st.title("📸 Face Clustering with Your Reference Photo")
+st.set_page_config(page_title="Face Match Clustering", layout="centered")
+st.markdown("""
+    <h1 style='text-align: center; color: #2c3e50;'>🔍 Face Match Clustering</h1>
+    <h4 style='text-align: center; color: #7f8c8d;'>Upload up to 100 face images and one reference image. We'll identify which ones belong to you.</h4>
+""", unsafe_allow_html=True)
 
 # Define folders
 INPUT_DIR = "temp_input"
@@ -23,59 +24,63 @@ for folder in [INPUT_DIR, REFERENCE_DIR, YOUR_CLUSTER, OTHER_CLUSTER]:
         shutil.rmtree(folder)
     os.makedirs(folder)
 
-# Uploads
-st.sidebar.header("📥 Upload Files")
-zip_file = st.sidebar.file_uploader("Upload ZIP of group images", type="zip")
+# Sidebar: File Uploads
+st.sidebar.header("📥 Upload Images")
+group_images = st.sidebar.file_uploader("Upload multiple group images (max 100)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 ref_image = st.sidebar.file_uploader("Upload your reference face image", type=["jpg", "jpeg", "png"])
 
-MAX_IMAGES = 40
-RESIZE_TO = (300, 300)
-DISTANCE_THRESHOLD = 10  # Adjust as needed
+MAX_IMAGES = 100
+DISTANCE_THRESHOLD = 10
+RESIZE_SCALE = 0.75
 
-# Resize helper
-
-def resize_image(path, size=(300, 300)):
+# Resize helper with % scale
+def resize_image_percent(path, scale=0.75):
     try:
         img = Image.open(path)
         img = img.convert("RGB")
-        img.thumbnail(size)
+        w, h = img.size
+        img = img.resize((int(w * scale), int(h * scale)))
         img.save(path)
     except:
         pass
 
 if st.sidebar.button("🚀 Start Matching"):
-    if not zip_file or not ref_image:
-        st.error("Please upload both the ZIP file and your reference image.")
+    if not group_images or not ref_image:
+        st.error("Please upload at least one reference image and group images.")
         st.stop()
 
-    # Extract ZIP
-    with open("images.zip", "wb") as f:
-        f.write(zip_file.read())
-    with zipfile.ZipFile("images.zip", 'r') as zip_ref:
-        zip_ref.extractall(INPUT_DIR)
+    st.info("📦 Preprocessing images and extracting embeddings...")
 
     # Save reference image
     ref_path = os.path.join(REFERENCE_DIR, "ref.jpg")
     with open(ref_path, "wb") as f:
         f.write(ref_image.read())
 
-    # Extract reference embedding
     try:
-        ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn')[0]['embedding']
+        with st.spinner("⚙️ Loading FaceNet model... This may take up to 30 seconds."):
+            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn')[0]['embedding']
     except:
         st.error("Could not extract reference embedding.")
         st.stop()
 
-    # Load and process images
-    image_paths = [os.path.join(INPUT_DIR, f) for f in os.listdir(INPUT_DIR) if f.lower().endswith(('jpg', 'jpeg', 'png'))][:MAX_IMAGES]
+    # Save group images
+    uploaded_images = group_images[:MAX_IMAGES]
+    image_paths = []
+    for img_file in uploaded_images:
+        filename = os.path.join(INPUT_DIR, img_file.name)
+        with open(filename, "wb") as f:
+            f.write(img_file.read())
+        resize_image_percent(filename, scale=RESIZE_SCALE)
+        image_paths.append(filename)
 
+    # Process and match
     matched = 0
     unmatched = 0
     progress = st.progress(0)
+    status_text = st.empty()
 
     for i, path in enumerate(image_paths):
         try:
-            resize_image(path, size=RESIZE_TO)
             emb = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True)[0]['embedding']
             distance = np.linalg.norm(np.array(ref_embedding) - np.array(emb))
             if distance < DISTANCE_THRESHOLD:
@@ -87,16 +92,24 @@ if st.sidebar.button("🚀 Start Matching"):
         except:
             continue
         progress.progress((i+1)/len(image_paths))
+        status_text.text(f"🔄 Processing {i+1} of {len(image_paths)} images")
+
+    if matched == 0 and unmatched == 0:
+        st.warning("⚠️ No faces processed. Please check image quality or supported formats.")
+        st.stop()
 
     # Zip outputs
     shutil.make_archive("Your_Cluster", 'zip', YOUR_CLUSTER)
     shutil.make_archive("Other_Cluster", 'zip', OTHER_CLUSTER)
 
-    # Show summary
     st.success(f"✅ Matching complete! {matched} matched, {unmatched} unmatched")
 
-    with open("Your_Cluster.zip", "rb") as f:
-        st.download_button("Download Your Photos", f, file_name="Your_Cluster.zip")
+    col1, col2 = st.columns(2)
+    with col1:
+        with open("Your_Cluster.zip", "rb") as f:
+            st.download_button("⬇️ Download Your Matches", f, file_name="Your_Cluster.zip")
+    with col2:
+        with open("Other_Cluster.zip", "rb") as f:
+            st.download_button("⬇️ Download Other Cluster", f, file_name="Other_Cluster.zip")
 
-    with open("Other_Cluster.zip", "rb") as f:
-        st.download_button("Download Other Cluster", f, file_name="Other_Cluster.zip")
+    st.info("💡 Tip: Upload images where the faces are clear and well-lit for better accuracy.")
