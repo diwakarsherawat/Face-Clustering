@@ -5,6 +5,11 @@ import numpy as np
 from PIL import Image
 from sklearn.preprocessing import StandardScaler
 from deepface import DeepFace
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logging.info("🟢 App started or restarted")
 
 st.set_page_config(page_title="Face Match Clustering", layout="centered")
 st.markdown("""
@@ -58,7 +63,7 @@ if st.sidebar.button("🚀 Start Matching"):
 
     try:
         with st.spinner("⚙️ Loading FaceNet model... This may take up to 30 seconds."):
-            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn')[0]['embedding']
+            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=False)[0]['embedding']
     except:
         st.error("Could not extract reference embedding.")
         st.stop()
@@ -81,7 +86,7 @@ if st.sidebar.button("🚀 Start Matching"):
 
     for i, path in enumerate(image_paths):
         try:
-            emb = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True)[0]['embedding']
+            emb = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=False)[0]['embedding']
             distance = np.linalg.norm(np.array(ref_embedding) - np.array(emb))
             if distance < DISTANCE_THRESHOLD:
                 shutil.copy(path, os.path.join(YOUR_CLUSTER, os.path.basename(path)))
@@ -91,8 +96,10 @@ if st.sidebar.button("🚀 Start Matching"):
                 unmatched += 1
         except:
             continue
+
         progress.progress((i+1)/len(image_paths))
         status_text.text(f"🔄 Processing {i+1} of {len(image_paths)} images")
+        time.sleep(0.2)
 
     if matched == 0 and unmatched == 0:
         st.warning("⚠️ No faces processed. Please check image quality or supported formats.")
