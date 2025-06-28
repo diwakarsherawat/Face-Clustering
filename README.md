@@ -21,14 +21,7 @@ This project automatically clusters similar faces from a folder of photos and or
 - `Invalid_Faces/` → Undetectable or blurry face photos
 
 ## 🚀 Run the Project
-
-### Option 1: Colab
 1. Open `main.ipynb` in Google Colab
 2. Mount your Drive
 3. Upload your images to a folder in Drive
 4. Run the notebook
-
-### Option 2: Local
-```bash
-pip install -r requirements.txt
-python main.py
