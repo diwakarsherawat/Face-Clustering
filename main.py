@@ -30,6 +30,19 @@ st.sidebar.header("📥 Upload Files")
 zip_file = st.sidebar.file_uploader("Upload ZIP of group images", type="zip")
 ref_image = st.sidebar.file_uploader("Upload your reference face image", type=["jpg", "jpeg", "png"])
 
+MAX_IMAGES = 40
+RESIZE_TO = (300, 300)
+
+# Resize helper
+def resize_image(path, size=(300, 300)):
+    try:
+        img = Image.open(path)
+        img = img.convert("RGB")
+        img.thumbnail(size)
+        img.save(path)
+    except Exception as e:
+        pass
+
 if st.sidebar.button("🚀 Start Clustering"):
     if not zip_file or not ref_image:
         st.error("Please upload both the ZIP file and your reference image.")
@@ -46,8 +59,10 @@ if st.sidebar.button("🚀 Start Clustering"):
         with open(ref_path, "wb") as f:
             f.write(ref_image.read())
 
-        # Load all valid image paths
+        # Load all valid image paths (limit to MAX_IMAGES)
         image_paths = [os.path.join(INPUT_DIR, f) for f in os.listdir(INPUT_DIR) if f.lower().endswith(('jpg', 'jpeg', 'png'))]
+        image_paths = image_paths[:MAX_IMAGES]
+
         embeddings = []
         valid_paths = []
 
@@ -55,13 +70,18 @@ if st.sidebar.button("🚀 Start Clustering"):
         progress = st.progress(0)
         for i, path in enumerate(image_paths):
             try:
-                rep = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='retinaface', enforce_detection=True)
+                resize_image(path, size=RESIZE_TO)
+                rep = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=True)
                 if rep:
                     embeddings.append(rep[0]['embedding'])
                     valid_paths.append(path)
             except:
                 continue
             progress.progress((i+1)/len(image_paths))
+
+        if len(embeddings) < 2:
+            st.error("Not enough valid faces found to perform clustering.")
+            st.stop()
 
         # Preprocess embeddings
         scaler = StandardScaler()
@@ -75,10 +95,14 @@ if st.sidebar.button("🚀 Start Clustering"):
 
         # Embed reference image
         st.subheader("📌 Matching Your Reference Face")
-        ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='retinaface')[0]['embedding']
-        ref_scaled = scaler.transform([ref_embedding])
-        ref_pca = pca.transform(ref_scaled)
-        ref_cluster = kmeans.predict(ref_pca)[0]
+        try:
+            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn')[0]['embedding']
+            ref_scaled = scaler.transform([ref_embedding])
+            ref_pca = pca.transform(ref_scaled)
+            ref_cluster = kmeans.predict(ref_pca)[0]
+        except:
+            st.error("Could not process reference face.")
+            st.stop()
 
         # Separate clusters
         for label, path in zip(labels, valid_paths):
