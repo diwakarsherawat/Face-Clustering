@@ -1,7 +1,8 @@
 import streamlit as st
-import os
 import shutil
 import numpy as np
+import os
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 import cv2
 from deepface import DeepFace
 from sklearn.preprocessing import StandardScaler
