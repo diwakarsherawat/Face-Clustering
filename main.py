@@ -2,11 +2,6 @@ import streamlit as st
 import os
 import shutil
 import numpy as np
-import subprocess
-import sys
-
-# Force install correct OpenCV version if not already installed
-subprocess.run([sys.executable, "-m", "pip", "install", "--force-reinstall", "opencv-python-headless==4.5.5.64"], check=True)
 import cv2
 from deepface import DeepFace
 from sklearn.preprocessing import StandardScaler
