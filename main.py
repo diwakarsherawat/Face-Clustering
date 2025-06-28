@@ -1,21 +1,19 @@
+ 
 import streamlit as st
 import os
 import shutil
 import numpy as np
-import face_recognition
+from deepface import DeepFace
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, DBSCAN
 import matplotlib.pyplot as plt
-import tempfile
 from PIL import Image
-import time
 
 st.set_page_config(page_title="Face Clustering App", layout="wide")
 st.title("🧠 Face Clustering App")
 st.markdown("Cluster face images from your Google Drive folder using DeepFace + ML")
 
-# Sidebar inputs
 st.sidebar.header("Step 1: Input Settings")
 image_folder = st.sidebar.text_input("🔗 Enter Google Drive image folder path")
 output_folder = st.sidebar.text_input("📁 Enter Google Drive output folder path")
@@ -48,14 +46,13 @@ if start_btn:
         for i, path in enumerate(image_paths):
             try:
                 status_text.text(f"Embedding image {i+1}/{len(image_paths)}")
-                image = face_recognition.load_image_file(path)
-                face_encodings = face_recognition.face_encodings(image)
-                if len(face_encodings) > 0: 
-                    embeddings.append(face_encodings[0])
+                reps = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='retinaface', enforce_detection=True)
+
+                if len(reps) > 0:
+                    embeddings.append(reps[0]['embedding'])
                     valid_image_paths.append(path)
                 else:
                     shutil.copy(path, invalid_folder)
-
             except Exception as e:
                 shutil.copy(path, invalid_folder)
             progress.progress((i + 1) / len(image_paths))
@@ -79,7 +76,6 @@ if start_btn:
 
         st.success(f"✅ Clustering complete: {n_clusters} clusters, {n_noise} noise points")
 
-        # Save clustered images
         for label, img_path in zip(labels, valid_image_paths):
             cluster_dir = os.path.join(output_folder, f"cluster_{label}")
             os.makedirs(cluster_dir, exist_ok=True)
@@ -93,7 +89,7 @@ if start_btn:
                     continue
                 st.subheader(f"Cluster {cluster_id}")
                 cluster_path = os.path.join(output_folder, f"cluster_{cluster_id}")
-                cluster_imgs = os.listdir(cluster_path)[:5]  # Show first 5
+                cluster_imgs = os.listdir(cluster_path)[:5]
                 cols = st.columns(len(cluster_imgs))
                 for img_file, col in zip(cluster_imgs, cols):
                     img = Image.open(os.path.join(cluster_path, img_file))
