@@ -35,7 +35,7 @@ group_images = st.sidebar.file_uploader("Upload multiple group images (max 100)"
 ref_image = st.sidebar.file_uploader("Upload your reference face image", type=["jpg", "jpeg", "png"])
 
 MAX_IMAGES = 100
-DISTANCE_THRESHOLD = 10
+DISTANCE_THRESHOLD = 0.65  # Optimized for SFace
 RESIZE_SCALE = 0.75
 
 # Resize helper with % scale
@@ -62,8 +62,8 @@ if st.sidebar.button("🚀 Start Matching"):
         f.write(ref_image.read())
 
     try:
-        with st.spinner("⚙️ Loading FaceNet model... This may take up to 30 seconds."):
-            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=False)[0]['embedding']
+        with st.spinner("⚙️ Loading SFace model... This may take up to 30 seconds."):
+            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='SFace', detector_backend='opencv', enforce_detection=False)[0]['embedding']
     except:
         st.error("Could not extract reference embedding.")
         st.stop()
@@ -86,7 +86,7 @@ if st.sidebar.button("🚀 Start Matching"):
 
     for i, path in enumerate(image_paths):
         try:
-            emb = DeepFace.represent(img_path=path, model_name='Facenet512', detector_backend='mtcnn', enforce_detection=False)[0]['embedding']
+            emb = DeepFace.represent(img_path=path, model_name='SFace', detector_backend='opencv', enforce_detection=False)[0]['embedding']
             distance = np.linalg.norm(np.array(ref_embedding) - np.array(emb))
             if distance < DISTANCE_THRESHOLD:
                 shutil.copy(path, os.path.join(YOUR_CLUSTER, os.path.basename(path)))
