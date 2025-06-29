@@ -60,7 +60,7 @@ if st.sidebar.button("🚀 Start Matching"):
         st.error("Please upload at least one reference image and group images.")
         st.stop()
 
-    if not API_URL.startswith("httpS"):
+    if not API_URL.startswith("https"):
         st.error("Please provide a valid backend API URL.")
         st.stop()
 
