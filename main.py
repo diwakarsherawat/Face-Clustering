@@ -41,7 +41,7 @@ MAX_IMAGES = 100
 RESIZE_SCALE = 0.75
 
 API_URL = "https://26dd-35-185-13-139.ngrok-free.app/cluster"
-API_KEY = "mysecretkey123"
+API_KEY = os.environ.get("API_KEY")
 
 def resize_image_percent(path, scale=0.75):
     try:
