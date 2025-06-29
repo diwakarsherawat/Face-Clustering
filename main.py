@@ -71,9 +71,17 @@ if st.sidebar.button("🚀 Start Matching"):
     with open(ref_path, "wb") as f:
         f.write(ref_image.read())
 
-    files = [("images", ("ref.jpg", open(ref_path, "rb"), "image/jpeg"))]
+  
+    files = []
+    with open(ref_path, "rb") as f:
+        ref_bytes = f.read()
+    files.append(("images", ("ref.jpg", ref_bytes, "image/jpeg")))
+
+    # Read and add group images safely
     for img in group_images[:MAX_IMAGES]:
-        files.append(("images", (img.name, img, "image/jpeg")))
+        image_bytes = img.read()
+        files.append(("images", (img.name, image_bytes, "image/jpeg")))
+   
 
     # Prepare clustering options
     data = {
