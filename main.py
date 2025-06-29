@@ -40,7 +40,7 @@ elif clustering_algorithm == "DBSCAN":
 API_KEY =  os.environ.get("API_KEY")
 
 # 🆕 Let user input backend URL dynamically
-API_URL = st.sidebar.text_input("🌐 Enter Backend API URL (ngrok)", value="httpS://your-ngrok-url.ngrok-free.app/cluster")
+API_URL = st.sidebar.text_input("🌐 Enter Backend API URL (ngrok)", value="https://your-ngrok-url.ngrok-free.app/cluster")
 
 MAX_IMAGES = 100
 RESIZE_SCALE = 0.75
