@@ -2,10 +2,9 @@ import streamlit as st
 import os
 import shutil
 import numpy as np
-from PIL import Image
-from sklearn.preprocessing import StandardScaler
-from deepface import DeepFace
 import time
+import requests
+from PIL import Image
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -18,13 +17,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Define folders
-INPUT_DIR = "temp_input"
+TEMP_DIR = "temp_input"
 REFERENCE_DIR = "temp_ref"
-YOUR_CLUSTER = "output/Your_Cluster"
-OTHER_CLUSTER = "output/Other_Cluster"
-
-# Clear previous data
-for folder in [INPUT_DIR, REFERENCE_DIR, YOUR_CLUSTER, OTHER_CLUSTER]:
+for folder in [TEMP_DIR, REFERENCE_DIR]:
     if os.path.exists(folder):
         shutil.rmtree(folder)
     os.makedirs(folder)
@@ -34,11 +29,20 @@ st.sidebar.header("📥 Upload Images")
 group_images = st.sidebar.file_uploader("Upload multiple group images (max 100)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 ref_image = st.sidebar.file_uploader("Upload your reference face image", type=["jpg", "jpeg", "png"])
 
+model_name = st.sidebar.selectbox("🧠 Choose Face Recognition Model", ["SFace", "Facenet", "Facenet512", "VGG-Face"])
+clustering_algorithm = st.sidebar.selectbox("📊 Choose Clustering Algorithm", ["KMeans", "DBSCAN"])
+if clustering_algorithm == "KMeans":
+    n_clusters = st.sidebar.slider("Number of Clusters", 2, 20, 5)
+elif clustering_algorithm == "DBSCAN":
+    eps = st.sidebar.slider("DBSCAN eps", 5.0, 50.0, 15.0)
+    min_samples = st.sidebar.slider("min_samples", 2, 10, 3)
+
 MAX_IMAGES = 100
-DISTANCE_THRESHOLD = 0.65  # Optimized for SFace
 RESIZE_SCALE = 0.75
 
-# Resize helper with % scale
+API_URL = "https://26dd-35-185-13-139.ngrok-free.app/cluster"
+API_KEY = "mysecretkey123"
+
 def resize_image_percent(path, scale=0.75):
     try:
         img = Image.open(path)
@@ -54,69 +58,36 @@ if st.sidebar.button("🚀 Start Matching"):
         st.error("Please upload at least one reference image and group images.")
         st.stop()
 
-    st.info("📦 Preprocessing images and extracting embeddings...")
+    st.info("📡 Sending images to backend API...")
 
-    # Save reference image
+    # Save reference image to list of files
     ref_path = os.path.join(REFERENCE_DIR, "ref.jpg")
     with open(ref_path, "wb") as f:
         f.write(ref_image.read())
 
+    files = [("images", ("ref.jpg", open(ref_path, "rb"), "image/jpeg"))]
+    for img in group_images[:MAX_IMAGES]:
+        files.append(("images", (img.name, img, "image/jpeg")))
+
+    # Prepare clustering options
+    data = {
+        "model_name": model_name,
+        "algorithm": clustering_algorithm,
+        "n_clusters": str(n_clusters) if clustering_algorithm == "KMeans" else "",
+        "eps": str(eps) if clustering_algorithm == "DBSCAN" else "",
+        "min_samples": str(min_samples) if clustering_algorithm == "DBSCAN" else ""
+    }
+
+    headers = {"x-api-key": API_KEY}
+
     try:
-        with st.spinner("⚙️ Loading SFace model... This may take up to 30 seconds."):
-            ref_embedding = DeepFace.represent(img_path=ref_path, model_name='SFace', detector_backend='opencv', enforce_detection=False)[0]['embedding']
-    except:
-        st.error("Could not extract reference embedding.")
-        st.stop()
-
-    # Save group images
-    uploaded_images = group_images[:MAX_IMAGES]
-    image_paths = []
-    for img_file in uploaded_images:
-        filename = os.path.join(INPUT_DIR, img_file.name)
-        with open(filename, "wb") as f:
-            f.write(img_file.read())
-        resize_image_percent(filename, scale=RESIZE_SCALE)
-        image_paths.append(filename)
-
-    # Process and match
-    matched = 0
-    unmatched = 0
-    progress = st.progress(0)
-    status_text = st.empty()
-
-    for i, path in enumerate(image_paths):
-        try:
-            emb = DeepFace.represent(img_path=path, model_name='SFace', detector_backend='opencv', enforce_detection=False)[0]['embedding']
-            distance = np.linalg.norm(np.array(ref_embedding) - np.array(emb))
-            if distance < DISTANCE_THRESHOLD:
-                shutil.copy(path, os.path.join(YOUR_CLUSTER, os.path.basename(path)))
-                matched += 1
-            else:
-                shutil.copy(path, os.path.join(OTHER_CLUSTER, os.path.basename(path)))
-                unmatched += 1
-        except:
-            continue
-
-        progress.progress((i+1)/len(image_paths))
-        status_text.text(f"🔄 Processing {i+1} of {len(image_paths)} images")
-        time.sleep(0.2)
-
-    if matched == 0 and unmatched == 0:
-        st.warning("⚠️ No faces processed. Please check image quality or supported formats.")
-        st.stop()
-
-    # Zip outputs
-    shutil.make_archive("Your_Cluster", 'zip', YOUR_CLUSTER)
-    shutil.make_archive("Other_Cluster", 'zip', OTHER_CLUSTER)
-
-    st.success(f"✅ Matching complete! {matched} matched, {unmatched} unmatched")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        with open("Your_Cluster.zip", "rb") as f:
-            st.download_button("⬇️ Download Your Matches", f, file_name="Your_Cluster.zip")
-    with col2:
-        with open("Other_Cluster.zip", "rb") as f:
-            st.download_button("⬇️ Download Other Cluster", f, file_name="Other_Cluster.zip")
+        response = requests.post(API_URL, files=files, data=data, headers=headers)
+        if response.status_code == 200:
+            st.success("✅ Matching complete! Download your matched and unmatched clusters:")
+            st.download_button("⬇️ Download Clustered ZIP", response.content, file_name="clusters.zip")
+        else:
+            st.error(f"❌ Error from backend: {response.text}")
+    except Exception as e:
+        st.error(f"🚨 Request failed: {e}")
 
     st.info("💡 Tip: Upload images where the faces are clear and well-lit for better accuracy.")
