@@ -37,11 +37,13 @@ elif clustering_algorithm == "DBSCAN":
     eps = st.sidebar.slider("DBSCAN eps", 5.0, 50.0, 15.0)
     min_samples = st.sidebar.slider("min_samples", 2, 10, 3)
 
+API_KEY =  os.environ.get("API_KEY")
+
+# 🆕 Let user input backend URL dynamically
+API_URL = st.sidebar.text_input("🌐 Enter Backend API URL (ngrok)", value="https://your-ngrok-url.ngrok-free.app/cluster")
+
 MAX_IMAGES = 100
 RESIZE_SCALE = 0.75
-
-API_URL = "https://26dd-35-185-13-139.ngrok-free.app/cluster"
-API_KEY = os.environ.get("API_KEY")
 
 def resize_image_percent(path, scale=0.75):
     try:
@@ -56,6 +58,10 @@ def resize_image_percent(path, scale=0.75):
 if st.sidebar.button("🚀 Start Matching"):
     if not group_images or not ref_image:
         st.error("Please upload at least one reference image and group images.")
+        st.stop()
+
+    if not API_URL.startswith("http"):
+        st.error("Please provide a valid backend API URL.")
         st.stop()
 
     st.info("📡 Sending images to backend API...")
